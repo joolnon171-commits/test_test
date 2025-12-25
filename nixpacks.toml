@@ -1,2 +1,0 @@
-[phases.setup]
-aptPkgs = ["libpng-dev", "libfreetype6-dev", "pkg-config", "python3-dev", "build-essential"]

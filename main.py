@@ -7,7 +7,6 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
-
 from db import init_db
 from handlers import register_handlers, AccessMiddleware, FSMTimeoutMiddleware
 
