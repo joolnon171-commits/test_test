@@ -1,245 +1,259 @@
 # analytics.py
+
 import io
-import matplotlib.pyplot as plt
 import matplotlib
+
+matplotlib.use('Agg')  # Важно: использовать бэкенд без GUI
+import matplotlib.pyplot as plt
+import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from db import get_daily_statistics, get_expense_breakdown
 
-# Используем агрессивный кэш для шрифтов
-matplotlib.use('Agg')
 
-
-def generate_profit_chart(daily_stats: List[Dict[str, Any]], currency: str) -> io.BytesIO:
+def generate_profit_chart(daily_stats: List[Dict[str, Any]], currency: str) -> Optional[io.BytesIO]:
     """Генерирует график прибыли по дням"""
     if not daily_stats or len(daily_stats) < 2:
         return None
 
-    dates = [stat["date_display"] for stat in daily_stats[::-1]]  # Переворачиваем для хронологического порядка
-    profits = [stat["net_profit"] for stat in daily_stats[::-1]]
+    try:
+        dates = [stat["date_display"] for stat in daily_stats[::-1]]
+        profits = [stat["net_profit"] for stat in daily_stats[::-1]]
 
-    plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(12, 6))
 
-    # Создаем столбчатую диаграмму
-    bars = plt.bar(dates, profits, color=['#4CAF50' if p >= 0 else '#F44336' for p in profits],
-                   edgecolor='black', linewidth=0.5)
+        # Создаем столбчатую диаграмму
+        bars = plt.bar(dates, profits, color=['#4CAF50' if p >= 0 else '#F44336' for p in profits],
+                       edgecolor='black', linewidth=0.5)
 
-    plt.title(f'📈 Прибыль по дням ({currency})', fontsize=16, fontweight='bold', pad=20)
-    plt.xlabel('Дата', fontsize=12)
-    plt.ylabel(f'Прибыль ({currency})', fontsize=12)
-    plt.xticks(rotation=45, fontsize=10)
-    plt.yticks(fontsize=10)
+        plt.title(f'📈 Прибыль по дням ({currency})', fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel('Дата', fontsize=12)
+        plt.ylabel(f'Прибыль ({currency})', fontsize=12)
+        plt.xticks(rotation=45, fontsize=10)
+        plt.yticks(fontsize=10)
 
-    # Добавляем сетку
-    plt.grid(axis='y', alpha=0.3, linestyle='--')
+        # Добавляем сетку
+        plt.grid(axis='y', alpha=0.3, linestyle='--')
 
-    # Добавляем значения на столбцы
-    for bar, profit in zip(bars, profits):
-        height = bar.get_height()
-        if height != 0:  # Не показываем 0
-            va = 'bottom' if height >= 0 else 'top'
-            y_offset = 3 if height >= 0 else -3
-            plt.text(bar.get_x() + bar.get_width() / 2., height + y_offset,
-                     f'{profit:.0f}',
-                     ha='center', va=va,
-                     fontsize=9, fontweight='bold',
-                     color='green' if height >= 0 else 'red')
+        # Добавляем значения на столбцы
+        for bar, profit in zip(bars, profits):
+            height = bar.get_height()
+            if height != 0:
+                va = 'bottom' if height >= 0 else 'top'
+                y_offset = max(profits) * 0.01 if height >= 0 else -max(profits) * 0.01
+                if y_offset == 0:
+                    y_offset = 3 if height >= 0 else -3
 
-    # Добавляем линию тренда если достаточно данных
-    if len(profits) > 2:
-        x_indices = range(len(profits))
-        try:
-            z = np.polyfit(x_indices, profits, 1)
-            p = np.poly1d(z)
-            plt.plot(dates, p(x_indices), "b--", alpha=0.5, linewidth=2, label='Тренд')
-            plt.legend()
-        except:
-            pass
+                plt.text(bar.get_x() + bar.get_width() / 2., height + y_offset,
+                         f'{profit:.0f}',
+                         ha='center', va=va,
+                         fontsize=9, fontweight='bold',
+                         color='green' if height >= 0 else 'red')
 
-    plt.tight_layout()
+        plt.tight_layout()
 
-    # Сохраняем в байты
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-    buf.seek(0)
-    plt.close()
+        # Сохраняем в байты
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
 
-    return buf
+        return buf
+    except Exception as e:
+        print(f"Ошибка при создании графика прибыли: {e}")
+        plt.close()
+        return None
 
 
-def generate_expense_pie_chart(expense_breakdown: Dict[str, float], currency: str) -> io.BytesIO:
+def generate_expense_pie_chart(expense_breakdown: Dict[str, float], currency: str) -> Optional[io.BytesIO]:
     """Генерирует круговую диаграмму затрат по категориям"""
     if not expense_breakdown:
         return None
 
-    # Объединяем мелкие категории в "Другое"
-    total = sum(expense_breakdown.values())
-    threshold = total * 0.05  # 5% порог
+    try:
+        # Объединяем мелкие категории в "Другое"
+        total = sum(expense_breakdown.values())
+        threshold = total * 0.05  # 5% порог
 
-    main_categories = {}
-    other_sum = 0
+        main_categories = {}
+        other_sum = 0
 
-    for category, amount in expense_breakdown.items():
-        if amount >= threshold:
-            main_categories[category] = amount
-        else:
-            other_sum += amount
+        for category, amount in expense_breakdown.items():
+            if amount >= threshold:
+                main_categories[category] = amount
+            else:
+                other_sum += amount
 
-    if other_sum > 0:
-        main_categories['Другое'] = other_sum
+        if other_sum > 0:
+            main_categories['Другое'] = other_sum
 
-    if not main_categories:
+        if not main_categories:
+            return None
+
+        plt.figure(figsize=(10, 8))
+
+        # Взрываем первый сегмент для акцента
+        explode = [0.05] + [0] * (len(main_categories) - 1)
+
+        wedges, texts, autotexts = plt.pie(
+            list(main_categories.values()),
+            labels=list(main_categories.keys()),
+            autopct=lambda pct: f'{pct:.1f}%\n({pct * total / 100:.0f})' if total > 0 else '0%',
+            startangle=90,
+            shadow=True,
+            explode=explode,
+            textprops={'fontsize': 10}
+        )
+
+        # Делаем проценты жирными
+        for autotext in autotexts:
+            autotext.set_color('black')
+            autotext.set_fontweight('bold')
+
+        plt.title(f'🥧 Структура затрат ({currency})', fontsize=16, fontweight='bold', pad=20)
+
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+
+        return buf
+    except Exception as e:
+        print(f"Ошибка при создании круговой диаграммы: {e}")
+        plt.close()
         return None
 
-    # Создаем красивые цвета
-    colors = plt.cm.Set3(np.linspace(0, 1, len(main_categories)))
 
-    plt.figure(figsize=(10, 8))
-
-    # Взрываем первый сегмент для акцента
-    explode = [0.05] + [0] * (len(main_categories) - 1)
-
-    wedges, texts, autotexts = plt.pie(
-        main_categories.values(),
-        labels=main_categories.keys(),
-        autopct=lambda pct: f'{pct:.1f}%\n({pct * sum(main_categories.values()) / 100:.0f})',
-        startangle=90,
-        colors=colors,
-        explode=explode,
-        shadow=True,
-        textprops={'fontsize': 10}
-    )
-
-    # Делаем проценты жирными
-    for autotext in autotexts:
-        autotext.set_color('black')
-        autotext.set_fontweight('bold')
-
-    plt.title(f'🥧 Структура затрат ({currency})', fontsize=16, fontweight='bold', pad=20)
-
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-    buf.seek(0)
-    plt.close()
-
-    return buf
-
-
-def generate_sales_velocity_chart(daily_stats: List[Dict[str, Any]], currency: str) -> io.BytesIO:
+def generate_sales_velocity_chart(daily_stats: List[Dict[str, Any]], currency: str) -> Optional[io.BytesIO]:
     """Генерирует график продаж по дням"""
     if not daily_stats:
         return None
 
-    dates = [stat["date_display"] for stat in daily_stats[::-1]]
-    sales_counts = [stat["sales_count"] for stat in daily_stats[::-1]]
-    revenues = [stat["total_sales"] for stat in daily_stats[::-1]]
+    try:
+        dates = [stat["date_display"] for stat in daily_stats[::-1]]
+        sales_counts = [stat["sales_count"] for stat in daily_stats[::-1]]
+        revenues = [stat["total_sales"] for stat in daily_stats[::-1]]
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
 
-    # График количества продаж
-    bars1 = ax1.bar(dates, sales_counts, color='#2196F3', edgecolor='black', linewidth=0.5)
-    ax1.set_title('🛒 Количество продаж по дням', fontsize=14, fontweight='bold')
-    ax1.set_ylabel('Количество', fontsize=12)
-    ax1.set_xticklabels(dates, rotation=45, fontsize=10)
-    ax1.grid(axis='y', alpha=0.3, linestyle='--')
+        # График количества продаж
+        bars1 = ax1.bar(dates, sales_counts, color='#2196F3', edgecolor='black', linewidth=0.5)
+        ax1.set_title('🛒 Количество продаж по дням', fontsize=14, fontweight='bold')
+        ax1.set_ylabel('Количество', fontsize=12)
+        ax1.set_xticklabels(dates, rotation=45, fontsize=10)
+        ax1.grid(axis='y', alpha=0.3, linestyle='--')
 
-    # Добавляем значения на столбцы
-    for bar, count in zip(bars1, sales_counts):
-        if count > 0:
-            ax1.text(bar.get_x() + bar.get_width() / 2., bar.get_height() + 0.1,
-                     f'{count}',
-                     ha='center', va='bottom',
-                     fontsize=9, fontweight='bold')
+        # Добавляем значения на столбцы
+        for bar, count in zip(bars1, sales_counts):
+            if count > 0:
+                ax1.text(bar.get_x() + bar.get_width() / 2., bar.get_height() + 0.1,
+                         f'{count}',
+                         ha='center', va='bottom',
+                         fontsize=9, fontweight='bold')
 
-    # График выручки
-    bars2 = ax2.bar(dates, revenues, color='#FF9800', edgecolor='black', linewidth=0.5)
-    ax2.set_title(f'💰 Выручка по дням ({currency})', fontsize=14, fontweight='bold')
-    ax2.set_ylabel(f'Выручка ({currency})', fontsize=12)
-    ax2.set_xlabel('Дата', fontsize=12)
-    ax2.set_xticklabels(dates, rotation=45, fontsize=10)
-    ax2.grid(axis='y', alpha=0.3, linestyle='--')
+        # График выручки
+        bars2 = ax2.bar(dates, revenues, color='#FF9800', edgecolor='black', linewidth=0.5)
+        ax2.set_title(f'💰 Выручка по дням ({currency})', fontsize=14, fontweight='bold')
+        ax2.set_ylabel(f'Выручка ({currency})', fontsize=12)
+        ax2.set_xlabel('Дата', fontsize=12)
+        ax2.set_xticklabels(dates, rotation=45, fontsize=10)
+        ax2.grid(axis='y', alpha=0.3, linestyle='--')
 
-    # Добавляем значения на столбцы
-    for bar, revenue in zip(bars2, revenues):
-        if revenue > 0:
-            ax2.text(bar.get_x() + bar.get_width() / 2., bar.get_height() + max(revenues) * 0.01,
-                     f'{revenue:.0f}',
-                     ha='center', va='bottom',
-                     fontsize=9, fontweight='bold')
+        # Добавляем значения на столбцы
+        for bar, revenue in zip(bars2, revenues):
+            if revenue > 0:
+                ax2.text(bar.get_x() + bar.get_width() / 2., bar.get_height() + max(revenues) * 0.01,
+                         f'{revenue:.0f}',
+                         ha='center', va='bottom',
+                         fontsize=9, fontweight='bold')
 
-    plt.tight_layout()
+        plt.tight_layout()
 
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-    buf.seek(0)
-    plt.close()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
 
-    return buf
+        return buf
+    except Exception as e:
+        print(f"Ошибка при создании графика скорости продаж: {e}")
+        plt.close()
+        return None
 
 
-def generate_combined_chart(daily_stats: List[Dict[str, Any]], currency: str) -> io.BytesIO:
+def generate_combined_chart(daily_stats: List[Dict[str, Any]], currency: str) -> Optional[io.BytesIO]:
     """Генерирует комбинированный график прибыли и продаж"""
     if not daily_stats or len(daily_stats) < 2:
         return None
 
-    dates = [stat["date_display"] for stat in daily_stats[::-1]]
-    profits = [stat["net_profit"] for stat in daily_stats[::-1]]
-    sales_counts = [stat["sales_count"] for stat in daily_stats[::-1]]
+    try:
+        dates = [stat["date_display"] for stat in daily_stats[::-1]]
+        profits = [stat["net_profit"] for stat in daily_stats[::-1]]
+        sales_counts = [stat["sales_count"] for stat in daily_stats[::-1]]
 
-    fig, ax1 = plt.subplots(figsize=(14, 8))
+        fig, ax1 = plt.subplots(figsize=(14, 8))
 
-    # Столбцы прибыли
-    bars = ax1.bar(dates, profits, color=['#4CAF50' if p >= 0 else '#F44336' for p in profits],
-                   alpha=0.7, label='Прибыль', edgecolor='black', linewidth=0.5)
+        # Столбцы прибыли
+        bars = ax1.bar(dates, profits, color=['#4CAF50' if p >= 0 else '#F44336' for p in profits],
+                       alpha=0.7, label='Прибыль', edgecolor='black', linewidth=0.5)
 
-    ax1.set_xlabel('Дата', fontsize=12)
-    ax1.set_ylabel(f'Прибыль ({currency})', fontsize=12, color='black')
-    ax1.tick_params(axis='y', labelcolor='black')
-    ax1.set_xticklabels(dates, rotation=45, fontsize=10)
-    ax1.grid(axis='y', alpha=0.3, linestyle='--')
+        ax1.set_xlabel('Дата', fontsize=12)
+        ax1.set_ylabel(f'Прибыль ({currency})', fontsize=12, color='black')
+        ax1.tick_params(axis='y', labelcolor='black')
+        ax1.set_xticklabels(dates, rotation=45, fontsize=10)
+        ax1.grid(axis='y', alpha=0.3, linestyle='--')
 
-    # Добавляем значения прибыли
-    for bar, profit in zip(bars, profits):
-        if profit != 0:
-            va = 'bottom' if profit >= 0 else 'top'
-            y_offset = max(profits) * 0.02 if profit >= 0 else -max(profits) * 0.02
-            ax1.text(bar.get_x() + bar.get_width() / 2., profit + y_offset,
-                     f'{profit:.0f}',
-                     ha='center', va=va,
-                     fontsize=9, fontweight='bold',
-                     color='green' if profit >= 0 else 'red')
+        # Добавляем значения прибыли
+        for bar, profit in zip(bars, profits):
+            if profit != 0:
+                va = 'bottom' if profit >= 0 else 'top'
+                y_offset = max([abs(p) for p in profits]) * 0.02
+                if profit >= 0:
+                    y_offset = abs(y_offset)
+                else:
+                    y_offset = -abs(y_offset)
 
-    # Линия количества продаж
-    ax2 = ax1.twinx()
-    line = ax2.plot(dates, sales_counts, 'b-', marker='o', linewidth=3,
-                    markersize=8, label='Кол-во продаж', alpha=0.7)
+                ax1.text(bar.get_x() + bar.get_width() / 2., profit + y_offset,
+                         f'{profit:.0f}',
+                         ha='center', va=va,
+                         fontsize=9, fontweight='bold',
+                         color='green' if profit >= 0 else 'red')
 
-    ax2.set_ylabel('Количество продаж', fontsize=12, color='blue')
-    ax2.tick_params(axis='y', labelcolor='blue')
+        # Линия количества продаж
+        ax2 = ax1.twinx()
+        line = ax2.plot(dates, sales_counts, 'b-', marker='o', linewidth=3,
+                        markersize=8, label='Кол-во продаж', alpha=0.7)
 
-    # Добавляем значения количества продаж
-    for i, count in enumerate(sales_counts):
-        if count > 0:
-            ax2.text(i, count + max(sales_counts) * 0.02, f'{count}',
-                     ha='center', va='bottom',
-                     fontsize=9, fontweight='bold', color='blue')
+        ax2.set_ylabel('Количество продаж', fontsize=12, color='blue')
+        ax2.tick_params(axis='y', labelcolor='blue')
 
-    # Объединяем легенды
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+        # Добавляем значения количества продаж
+        for i, count in enumerate(sales_counts):
+            if count > 0:
+                ax2.text(i, count + max(sales_counts) * 0.02, f'{count}',
+                         ha='center', va='bottom',
+                         fontsize=9, fontweight='bold', color='blue')
 
-    plt.title(f'📊 Комбинированный анализ: Прибыль и количество продаж ({currency})',
-              fontsize=16, fontweight='bold', pad=20)
+        # Объединяем легенды
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
 
-    plt.tight_layout()
+        plt.title(f'📊 Комбинированный анализ: Прибыль и количество продаж ({currency})',
+                  fontsize=16, fontweight='bold', pad=20)
 
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-    buf.seek(0)
-    plt.close()
+        plt.tight_layout()
 
-    return buf
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        plt.close()
+
+        return buf
+    except Exception as e:
+        print(f"Ошибка при создании комбинированного графика: {e}")
+        plt.close()
+        return None
 
 
 def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
@@ -309,7 +323,7 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
         total_profit_week = sum(day["net_profit"] for day in daily_stats)
         total_sales_week = sum(day["sales_count"] for day in daily_stats)
 
-        for day in daily_stats[:7]:  # Показываем только последние 7 дней
+        for day in daily_stats[:7]:
             profit_emoji = "🟢" if day["net_profit"] >= 0 else "🔴"
             report += f"• {day['day_name'][:3]}: {profit_emoji} {day['net_profit']:.0f} ({day['sales_count']} продаж)\n"
 
@@ -328,7 +342,6 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
 ────────────────────────────
 """
 
-    # Генерируем рекомендации на основе данных
     recommendations = []
 
     if profitability['profitability_percentage'] < 70:
@@ -353,5 +366,58 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
     return report
 
 
-# Импортируем numpy для расчетов трендов
-import numpy as np
+def calculate_break_even_point(total_fixed_costs: float, profit_per_unit: float) -> Dict[str, Any]:
+    """Рассчитывает точку безубыточности"""
+    if profit_per_unit <= 0:
+        return {"break_even_units": 0, "message": "Недостаточная прибыль на единицу"}
+
+    break_even_units = total_fixed_costs / profit_per_unit
+
+    return {
+        "break_even_units": break_even_units,
+        "total_fixed_costs": total_fixed_costs,
+        "profit_per_unit": profit_per_unit,
+        "message": f"Точка безубыточности: {break_even_units:.0f} единиц"
+    }
+
+
+def generate_financial_report(session_details: Dict[str, Any],
+                              transaction_stats: Dict[str, Any],
+                              daily_stats: List[Dict[str, Any]]) -> str:
+    """Генерирует текстовый финансовый отчет"""
+
+    report = f"""
+📊 ДЕТАЛЬНЫЙ ФИНАНСОВЫЙ ОТЧЕТ
+Сессия: {session_details['name']}
+Валюта: {session_details['currency']}
+Статус: {'🟢 Активна' if session_details['is_active'] else '🔴 Закрыта'}
+
+📈 ОСНОВНЫЕ ПОКАЗАТЕЛИ:
+• Общий доход: {session_details['total_sales']:.2f} {session_details['currency']}
+• Общие затраты: {session_details['total_expenses']:.2f} {session_details['currency']}
+• Чистая прибыль: {session_details['balance']:.2f} {session_details['currency']}
+• Маржа прибыли: {((session_details['balance'] / session_details['total_sales'] * 100) if session_details['total_sales'] > 0 else 0):.1f}%
+• Количество продаж: {session_details['sales_count']}
+
+💸 АНАЛИТИКА:
+• Средний чек: {(session_details['total_sales'] / session_details['sales_count'] if session_details['sales_count'] > 0 else 0):.2f}
+• ROI (окупаемость): {((session_details['balance'] / session_details['total_expenses'] * 100) if session_details['total_expenses'] > 0 else 0):.1f}%
+• Долги к получению: {session_details['owed_to_me']:.2f}
+• Мои долги: {session_details['i_owe']:.2f}
+
+📅 ПОСЛЕДНИЕ 7 ДНЕЙ:
+"""
+
+    for day in daily_stats[:7]:
+        profit_sign = "🟢" if day['net_profit'] >= 0 else "🔴"
+        report += f"• {day['day_name']}: {profit_sign} {day['net_profit']:.2f} ({day['sales_count']} продаж)\n"
+
+    forecast_days = 30
+    if transaction_stats.get('sales_count', 0) > 0:
+        avg_daily = transaction_stats.get('net_profit', 0) / max(transaction_stats.get('sales_count', 1), 1)
+        monthly_forecast = avg_daily * 30
+        report += f"\n📊 ПРОГНОЗ НА МЕСЯЦ:\n"
+        report += f"• Ожидаемая прибыль: {monthly_forecast:.2f} {session_details['currency']}\n"
+        report += f"• При текущем темпе: {avg_daily:.2f}/день\n"
+
+    return report

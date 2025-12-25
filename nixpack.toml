@@ -1,0 +1,8 @@
+[phases.setup]
+cmds = ["apt-get update && apt-get install -y python3-dev build-essential libfreetype6-dev libpng-dev"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python main.py"
