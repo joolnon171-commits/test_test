@@ -241,3 +241,213 @@ def get_confirmation_inline(action: str, item_id: int) -> InlineKeyboardMarkup:
 
     if action == 'close_session':
         confirm_text = "✅ Да, завершить сессию"
+        confirm_icon = "✅"
+    else:
+        confirm_text = "✅ Да, удалить"
+        confirm_icon = "🗑️"
+
+    builder.add(InlineKeyboardButton(
+        text=confirm_text,
+        callback_data=f"confirm_{action}_{item_id}"
+    ))
+    builder.add(InlineKeyboardButton(
+        text="❌ Нет, отмена",
+        callback_data="cancel_action"
+    ))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_edit_item_inline(item_type: str, item_id: int) -> InlineKeyboardMarkup:
+    """
+    Клавиатура для выбора поля редактирования.
+    :param item_type: 'transaction' или 'debt'
+    :param item_id: ID элемента
+    """
+    builder = InlineKeyboardBuilder()
+
+    if item_type == 'transaction':
+        builder.add(InlineKeyboardButton(
+            text="✏️ Сумма",
+            callback_data=f"edit_field_{item_type}_{item_id}_amount"
+        ))
+        builder.add(InlineKeyboardButton(
+            text="✏️ Описание",
+            callback_data=f"edit_field_{item_type}_{item_id}_description"
+        ))
+
+    elif item_type == 'debt':
+        builder.add(InlineKeyboardButton(
+            text="✏️ Сумма",
+            callback_data=f"edit_field_{item_type}_{item_id}_amount"
+        ))
+        builder.add(InlineKeyboardButton(
+            text="✏️ Имя",
+            callback_data=f"edit_field_{item_type}_{item_id}_person_name"
+        ))
+        builder.add(InlineKeyboardButton(
+            text="✏️ Описание",
+            callback_data=f"edit_field_{item_type}_{item_id}_description"
+        ))
+        builder.add(InlineKeyboardButton(
+            text="✅ Погашен",
+            callback_data=f"repay_debt_{item_id}"
+        ))
+
+    builder.add(InlineKeyboardButton(
+        text="⬅️ Назад",
+        callback_data=f"cancel_edit_{item_type}"
+    ))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_currency_inline() -> InlineKeyboardMarkup:
+    """Клавиатура выбора валюты"""
+    builder = InlineKeyboardBuilder()
+    builder.add(InlineKeyboardButton(text="USDT 💎", callback_data="currency_USDT"))
+    builder.add(InlineKeyboardButton(text="Рубль ПМР 🇲🇩", callback_data="currency_RUB"))
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+# --- РАСШИРЕННЫЕ ФУНКЦИИ ---
+
+def get_advanced_features_inline() -> InlineKeyboardMarkup:
+    """Клавиатура расширенных функций для интернет-продаж"""
+    builder = InlineKeyboardBuilder()
+
+    builder.add(InlineKeyboardButton(text="📊 Детальная аналитика", callback_data="advanced_detailed_analytics"))
+    builder.add(InlineKeyboardButton(text="🚀 Скорость продаж", callback_data="advanced_sales_velocity"))
+    builder.add(InlineKeyboardButton(text="💰 ROI анализ", callback_data="advanced_roi_analysis"))
+    builder.add(InlineKeyboardButton(text="📈 Графики", callback_data="advanced_charts"))
+    builder.add(InlineKeyboardButton(text="⚡ Быстрые затраты", callback_data="advanced_quick_expenses"))
+    builder.add(InlineKeyboardButton(text="📋 Категории затрат", callback_data="advanced_expense_categories"))
+    builder.add(InlineKeyboardButton(text="🔮 Прогноз продаж", callback_data="advanced_sales_forecast"))
+    builder.add(InlineKeyboardButton(text="⚙️ Настройки сессии", callback_data="advanced_settings"))
+    builder.add(InlineKeyboardButton(text="⬅️ Назад в меню", callback_data="session_menu"))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_quick_expense_categories_inline() -> InlineKeyboardMarkup:
+    """Кнопки быстрых категорий затрат для интернет-продаж"""
+    builder = InlineKeyboardBuilder()
+
+    categories = get_quick_expense_categories()
+
+    for category in categories:
+        builder.add(InlineKeyboardButton(text=category, callback_data=f"quick_exp_{category}"))
+
+    builder.add(InlineKeyboardButton(text="✏️ Своя категория", callback_data="quick_exp_custom"))
+    builder.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_features"))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_charts_inline() -> InlineKeyboardMarkup:
+    """Кнопки графиков для интернет-продаж"""
+    builder = InlineKeyboardBuilder()
+
+    charts = [
+        ("📈 Прибыль по дням", "chart_profit"),
+        ("🥧 Структура затрат", "chart_expenses"),
+        ("🚀 Скорость продаж", "chart_velocity"),
+        ("📊 Комбинированный", "chart_combined")
+    ]
+
+    for text, chart_type in charts:
+        builder.add(InlineKeyboardButton(text=text, callback_data=f"chart_{chart_type}"))
+
+    builder.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_features"))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_forecast_period_inline() -> InlineKeyboardMarkup:
+    """Кнопки для выбора периода прогноза"""
+    builder = InlineKeyboardBuilder()
+
+    periods = [
+        ("📅 На неделю", "7"),
+        ("📆 На месяц", "30"),
+        ("📊 На квартал", "90"),
+        ("🎯 На полгода", "180"),
+        ("✏️ Свой период", "custom")
+    ]
+
+    for text, days in periods:
+        builder.add(InlineKeyboardButton(text=text, callback_data=f"forecast_{days}"))
+
+    builder.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_sales_forecast"))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_date_range_inline() -> InlineKeyboardMarkup:
+    """Кнопки для выбора периода анализа"""
+    builder = InlineKeyboardBuilder()
+
+    periods = [
+        ("📅 Сегодня", "today"),
+        ("📅 Вчера", "yesterday"),
+        ("📅 Текущая неделя", "week"),
+        ("📅 Текущий месяц", "month"),
+        ("📅 Последние 7 дней", "last7"),
+        ("📅 Последние 30 дней", "last30"),
+        ("📅 За все время", "all"),
+        ("✏️ Выбрать даты", "custom")
+    ]
+
+    for text, period in periods:
+        builder.add(InlineKeyboardButton(text=text, callback_data=f"period_{period}"))
+
+    builder.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_features"))
+
+    builder.adjust(3)
+    return builder.as_markup()
+
+
+def get_settings_inline() -> InlineKeyboardMarkup:
+    """Кнопки настроек сессии"""
+    builder = InlineKeyboardBuilder()
+
+    builder.add(InlineKeyboardButton(text="✏️ Изменить название", callback_data="settings_change_name"))
+    builder.add(InlineKeyboardButton(text="💰 Изменить бюджет", callback_data="settings_change_budget"))
+    builder.add(InlineKeyboardButton(text="📊 Сводка данных", callback_data="settings_summary"))
+    builder.add(InlineKeyboardButton(text="🔄 Сбросить сессию", callback_data="settings_reset_confirm"))
+    builder.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_features"))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_reset_confirmation_inline() -> InlineKeyboardMarkup:
+    """Подтверждение сброса сессии"""
+    builder = InlineKeyboardBuilder()
+
+    builder.add(InlineKeyboardButton(text="✅ Да, сбросить все данные", callback_data="settings_reset"))
+    builder.add(InlineKeyboardButton(text="❌ Нет, отмена", callback_data="advanced_settings"))
+
+    builder.adjust(2)
+    return builder.as_markup()
+
+
+def get_back_to_session_inline(session_id: int) -> InlineKeyboardMarkup:
+    """Кнопка возврата в меню сессии"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ В меню сессии", callback_data=f"nav_session_{session_id}")]
+    ])
+
+
+def get_back_to_advanced_inline() -> InlineKeyboardMarkup:
+    """Кнопка возврата к расширенным функциям"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад к аналитике", callback_data="advanced_features")]
+    ])
