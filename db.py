@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 import requests
 from dotenv import load_dotenv
+import numpy as np
 
 # --- ЗАГРУЗКА ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 load_dotenv()
@@ -256,7 +257,7 @@ def get_user_sessions(user_id: int) -> List[tuple]:
                 session_data["is_active"]
             ))
 
-    return sorted(sessions, key=lambda x: x[0], reverse=True)  # Новые сверху
+    return sorted(sessions, key=lambda x: x[0], reverse=True)
 
 
 def get_session_details(session_id: int) -> Optional[Dict[str, Any]]:
@@ -364,8 +365,7 @@ def add_transaction(session_id: int, trans_type: str, amount: float, expense_amo
     return transaction_id
 
 
-def get_transactions_list(session_id: int, trans_type: str = None, search_query: str = None, limit: int = None) -> List[
-    Dict[str, Any]]:
+def get_transactions_list(session_id: int, trans_type: str = None, search_query: str = None, limit: int = None) -> List[Dict[str, Any]]:
     """Возвращает список транзакций с фильтрацией"""
     data = db_manager._load_data()
     transactions = []
@@ -482,8 +482,7 @@ def add_debt(session_id: int, debt_type: str, person_name: str, amount: float, d
     return debt_id
 
 
-def get_debts_list(session_id: int, debt_type: str = None, search_query: str = None, limit: int = None) -> List[
-    Dict[str, Any]]:
+def get_debts_list(session_id: int, debt_type: str = None, search_query: str = None, limit: int = None) -> List[Dict[str, Any]]:
     """Возвращает список долгов с фильтрацией"""
     data = db_manager._load_data()
     debts = []
@@ -626,6 +625,7 @@ def get_sales_velocity(session_id: int) -> Dict[str, Any]:
             "avg_time_between_sales": 0,
             "sales_per_day": 0,
             "velocity_score": 0,
+            "total_sales_analyzed": len(transactions),
             "message": "Недостаточно данных для анализа"
         }
 
@@ -648,6 +648,7 @@ def get_sales_velocity(session_id: int) -> Dict[str, Any]:
             "avg_time_between_sales": 0,
             "sales_per_day": 0,
             "velocity_score": 0,
+            "total_sales_analyzed": len(transactions),
             "message": "Не удалось рассчитать скорость"
         }
 
@@ -688,7 +689,8 @@ def get_profitability_analysis(session_id: int) -> Dict[str, Any]:
             "profitability_percentage": 0,
             "avg_profit_margin": 0,
             "most_profitable": [],
-            "least_profitable": []
+            "least_profitable": [],
+            "total_sales_analyzed": 0
         }
 
     profitable = []
@@ -816,11 +818,14 @@ def get_roi_analysis(session_id: int) -> Dict[str, Any]:
     if ad_expenses == 0:
         return {
             "roi_percentage": 0,
-            "romi": 0,  # Return on Marketing Investment
+            "romi": 0,
             "ad_spend": 0,
-            "revenue_from_ads": total_revenue,  # Предполагаем что весь доход от рекламы
-            "cac": 0,  # Customer Acquisition Cost
-            "ltv": 0,  # Lifetime Value (приблизительно)
+            "revenue": total_revenue,
+            "revenue_from_ads": total_revenue,
+            "cac": 0,
+            "ltv": 0,
+            "total_expenses": total_expenses,
+            "ltv_cac_ratio": 0,
             "message": "Затраты на рекламу не найдены"
         }
 
@@ -835,7 +840,7 @@ def get_roi_analysis(session_id: int) -> Dict[str, Any]:
 
     # LTV (Lifetime Value) - приблизительный расчет
     avg_sale = total_revenue / len(sales) if sales else 0
-    ltv = avg_sale * 3  # Предполагаем 3 повторных покупки
+    ltv = avg_sale * 3
 
     return {
         "roi_percentage": roi_percentage,
@@ -860,38 +865,43 @@ def get_sales_forecast(session_id: int, days: int = 30) -> Dict[str, Any]:
             "forecast_profit": 0,
             "confidence": 0,
             "trend": "stable",
+            "trend_emoji": "➡️",
+            "avg_daily_profit": 0,
+            "avg_daily_revenue": 0,
+            "days_analyzed": len(daily_stats),
             "message": "Недостаточно данных для прогноза (нужно минимум 7 дней)"
         }
 
     # Рассчитываем тренд
-    recent_profits = [day["net_profit"] for day in daily_stats[:7]]
+    recent_profits = [day.get("net_profit", 0) for day in daily_stats[:7]]
     avg_recent = sum(recent_profits) / len(recent_profits)
 
-    older_profits = [day["net_profit"] for day in daily_stats[7:14] if len(daily_stats) > 7]
+    older_profits = [day.get("net_profit", 0) for day in daily_stats[7:14] if len(daily_stats) > 7]
     avg_older = sum(older_profits) / len(older_profits) if older_profits else avg_recent
 
     # Определяем тренд
     if avg_recent > avg_older * 1.2:
         trend = "up"
         trend_factor = 1.1
+        trend_emoji = "📈"
     elif avg_recent < avg_older * 0.8:
         trend = "down"
         trend_factor = 0.9
+        trend_emoji = "📉"
     else:
         trend = "stable"
         trend_factor = 1.0
+        trend_emoji = "➡️"
 
     # Прогноз
-    avg_daily_profit = sum(day["net_profit"] for day in daily_stats) / len(daily_stats)
-    avg_daily_revenue = sum(day["total_sales"] for day in daily_stats) / len(daily_stats)
+    avg_daily_profit = sum(day.get("net_profit", 0) for day in daily_stats) / len(daily_stats)
+    avg_daily_revenue = sum(day.get("total_sales", 0) for day in daily_stats) / len(daily_stats)
 
     forecast_profit = avg_daily_profit * days * trend_factor
     forecast_revenue = avg_daily_revenue * days * trend_factor
 
     # Уверенность в прогнозе
     confidence = min(90, len(daily_stats) * 3)
-
-    trend_emoji = "📈" if trend == "up" else "📉" if trend == "down" else "➡️"
 
     return {
         "forecast_revenue": forecast_revenue,

@@ -1067,30 +1067,33 @@ async def advanced_features_handler(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
+# В handlers.py найдите функцию show_detailed_analytics и замените её:
 
 async def show_detailed_analytics(callback: CallbackQuery, state: FSMContext, session_id: int):
     """Показывает детальную аналитику"""
-    summary = get_session_summary(session_id)
-    if not summary:
-        await callback.answer("Ошибка: сессия не найдена.", show_alert=True)
-        return
-
-    report = generate_analytics_report(summary)
-
-    reply_markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📈 Графики", callback_data="advanced_charts")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_features")]
-    ])
-
     try:
-        await callback.message.edit_text(report, reply_markup=reply_markup)
+        summary = get_session_summary(session_id)
+        if not summary:
+            await callback.answer("Ошибка: сессия не найдена.", show_alert=True)
+            return
+
+        report = generate_analytics_report(summary)
+
+        reply_markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📈 Графики", callback_data="advanced_charts")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="advanced_features")]
+        ])
+
+        try:
+            await callback.message.edit_text(report, reply_markup=reply_markup)
+        except Exception as e:
+            logger.error(f"Ошибка при редактировании сообщения: {e}")
+            await callback.bot.send_message(callback.from_user.id, report, reply_markup=reply_markup)
     except Exception as e:
-        logger.error(f"Ошибка при редактировании сообщения: {e}")
-        await callback.bot.send_message(callback.from_user.id, report, reply_markup=reply_markup)
+        logger.error(f"Ошибка при генерации отчета: {e}")
+        await callback.answer(f"Ошибка при генерации отчета: {str(e)[:100]}", show_alert=True)
 
     await callback.answer()
-
-
 async def show_sales_velocity(callback: CallbackQuery, state: FSMContext, session_id: int):
     """Показывает анализ скорости продаж"""
     velocity = get_sales_velocity(session_id)

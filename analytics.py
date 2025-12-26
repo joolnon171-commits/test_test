@@ -1,19 +1,13 @@
 # analytics.py
 import io
-import matplotlib.pyplot as plt
 import matplotlib
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
-from db import get_daily_statistics, get_expense_breakdown
-# В начале analytics.py добавьте:
-import matplotlib
+
 matplotlib.use('Agg')  # ДОЛЖНО БЫТЬ В САМОМ НАЧАЛЕ, перед импортом pyplot
 import matplotlib.pyplot as plt
-
-# И импортируйте numpy в правильном месте
 import numpy as np
-# Используем агрессивный кэш для шрифтов
-matplotlib.use('Agg')
+from datetime import datetime, timedelta
+from typing import Dict, List, Any
+from db import get_daily_statistics, get_expense_breakdown
 
 
 def generate_profit_chart(daily_stats: List[Dict[str, Any]], currency: str) -> io.BytesIO:
@@ -21,8 +15,8 @@ def generate_profit_chart(daily_stats: List[Dict[str, Any]], currency: str) -> i
     if not daily_stats or len(daily_stats) < 2:
         return None
 
-    dates = [stat["date_display"] for stat in daily_stats[::-1]]  # Переворачиваем для хронологического порядка
-    profits = [stat["net_profit"] for stat in daily_stats[::-1]]
+    dates = [stat.get("date_display", "") for stat in daily_stats[::-1]]
+    profits = [stat.get("net_profit", 0) for stat in daily_stats[::-1]]
 
     plt.figure(figsize=(12, 6))
 
@@ -136,9 +130,9 @@ def generate_sales_velocity_chart(daily_stats: List[Dict[str, Any]], currency: s
     if not daily_stats:
         return None
 
-    dates = [stat["date_display"] for stat in daily_stats[::-1]]
-    sales_counts = [stat["sales_count"] for stat in daily_stats[::-1]]
-    revenues = [stat["total_sales"] for stat in daily_stats[::-1]]
+    dates = [stat.get("date_display", "") for stat in daily_stats[::-1]]
+    sales_counts = [stat.get("sales_count", 0) for stat in daily_stats[::-1]]
+    revenues = [stat.get("total_sales", 0) for stat in daily_stats[::-1]]
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
 
@@ -188,9 +182,9 @@ def generate_combined_chart(daily_stats: List[Dict[str, Any]], currency: str) ->
     if not daily_stats or len(daily_stats) < 2:
         return None
 
-    dates = [stat["date_display"] for stat in daily_stats[::-1]]
-    profits = [stat["net_profit"] for stat in daily_stats[::-1]]
-    sales_counts = [stat["sales_count"] for stat in daily_stats[::-1]]
+    dates = [stat.get("date_display", "") for stat in daily_stats[::-1]]
+    profits = [stat.get("net_profit", 0) for stat in daily_stats[::-1]]
+    sales_counts = [stat.get("sales_count", 0) for stat in daily_stats[::-1]]
 
     fig, ax1 = plt.subplots(figsize=(14, 8))
 
@@ -250,50 +244,64 @@ def generate_combined_chart(daily_stats: List[Dict[str, Any]], currency: str) ->
 
 def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
     """Генерирует текстовый аналитический отчет"""
-    details = session_summary["details"]
-    velocity = session_summary["velocity"]
-    profitability = session_summary["profitability"]
-    roi = session_summary["roi"]
-    forecast = session_summary["forecast"]
+    if not session_summary:
+        return "Ошибка: не удалось получить данные для отчета"
+
+    # Получаем данные с безопасным доступом
+    details = session_summary.get("details", {})
+    velocity = session_summary.get("velocity", {})
+    profitability = session_summary.get("profitability", {})
+    roi = session_summary.get("roi", {})
+    forecast = session_summary.get("forecast", {})
     daily_stats = session_summary.get("daily_stats", [])
     expense_breakdown = session_summary.get("expense_breakdown", {})
+
+    # Безопасный доступ к дате создания
+    created_at = details.get('created_at')
+    if created_at:
+        try:
+            created_date = datetime.fromisoformat(created_at).strftime('%d.%m.%Y %H:%M')
+        except:
+            created_date = 'N/A'
+    else:
+        created_date = 'N/A'
 
     report = f"""
 📊 ПОДРОБНЫЙ АНАЛИТИЧЕСКИЙ ОТЧЕТ
 ────────────────────────────
-Сессия: <b>{details['name']}</b>
-Валюта: <b>{details['currency']}</b>
-Статус: <b>{'🟢 Активна' if details['is_active'] else '🔴 Закрыта'}</b>
-Создана: <b>{datetime.fromisoformat(details['created_at']).strftime('%d.%m.%Y %H:%M') if details.get('created_at') else 'N/A'}</b>
+Сессия: <b>{details.get('name', 'Нет данных')}</b>
+Валюта: <b>{details.get('currency', 'Нет данных')}</b>
+Статус: <b>{'🟢 Активна' if details.get('is_active', False) else '🔴 Закрыта'}</b>
+Создана: <b>{created_date}</b>
 
 📈 ОСНОВНЫЕ МЕТРИКИ:
 ────────────────────────────
-• Общая выручка: <b>{details['total_sales']:.2f} {details['currency']}</b>
-• Общие затраты: <b>{details['total_expenses']:.2f} {details['currency']}</b>
-• Чистая прибыль: <b>{details['balance']:.2f} {details['currency']}</b>
-• Количество продаж: <b>{details['sales_count']}</b>
-• Средний чек: <b>{details['avg_check']:.2f} {details['currency']}</b>
-• Рентабельность: <b>{profitability['profitability_percentage']:.1f}%</b> ({profitability['total_profitable']}/{profitability['total_sales_analyzed']} прибыльных)
+• Общая выручка: <b>{details.get('total_sales', 0):.2f} {details.get('currency', '')}</b>
+• Общие затраты: <b>{details.get('total_expenses', 0):.2f} {details.get('currency', '')}</b>
+• Чистая прибыль: <b>{details.get('balance', 0):.2f} {details.get('currency', '')}</b>
+• Количество продаж: <b>{details.get('sales_count', 0)}</b>
+• Средний чек: <b>{details.get('avg_check', 0):.2f} {details.get('currency', '')}</b>
+• Рентабельность: <b>{profitability.get('profitability_percentage', 0):.1f}%</b> ({profitability.get('total_profitable', 0)}/{profitability.get('total_sales_analyzed', 0)} прибыльных)
 
 🚀 СКОРОСТЬ ПРОДАЖ:
 ────────────────────────────
-• Среднее время между продажами: <b>{velocity['avg_time_between_sales']:.1f} часов</b>
-• Продаж в день: <b>{velocity['sales_per_day']:.1f}</b>
+• Среднее время между продажами: <b>{velocity.get('avg_time_between_sales', 0):.1f} часов</b>
+• Продаж в день: <b>{velocity.get('sales_per_day', 0):.1f}</b>
 • Оценка скорости: <b>{'🔥' * min(5, velocity.get('velocity_score', 0) // 2)}</b> ({velocity.get('velocity_score', 0)}/10)
 
 💰 АНАЛИЗ ПРИБЫЛЬНОСТИ:
 ────────────────────────────
-• Средняя маржа: <b>{profitability['avg_profit_margin']:.1f}%</b>
-• Прибыльных сделок: <b>{profitability['total_profitable']}</b>
-• Убыточных сделок: <b>{profitability['total_unprofitable']}</b>
+• Средняя маржа: <b>{profitability.get('avg_profit_margin', 0):.1f}%</b>
+• Прибыльных сделок: <b>{profitability.get('total_profitable', 0)}</b>
+• Убыточных сделок: <b>{profitability.get('total_unprofitable', 0)}</b>
 
 🎯 ROI АНАЛИЗ:
 ────────────────────────────
-• Общий ROI: <b>{roi['roi_percentage']:.1f}%</b>
-• ROMI (возврат на маркетинг): <b>{roi['romi']:.1f}%</b>
-• Расходы на рекламу: <b>{roi['ad_spend']:.2f} {details['currency']}</b>
-• CAC (стоимость привлечения): <b>{roi['cac']:.2f} {details['currency']}</b>
-• LTV/CAC соотношение: <b>{roi['ltv_cac_ratio']:.2f}</b>
+• Общий ROI: <b>{roi.get('roi_percentage', 0):.1f}%</b>
+• ROMI (возврат на маркетинг): <b>{roi.get('romi', 0):.1f}%</b>
+• Расходы на рекламу: <b>{roi.get('ad_spend', 0):.2f} {details.get('currency', '')}</b>
+• CAC (стоимость привлечения): <b>{roi.get('cac', 0):.2f} {details.get('currency', '')}</b>
+• LTV/CAC соотношение: <b>{roi.get('ltv_cac_ratio', 0):.2f}</b>
 
 📊 ЗАТРАТЫ ПО КАТЕГОРИЯМ:
 ────────────────────────────
@@ -303,7 +311,7 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
         total_expenses = sum(expense_breakdown.values())
         for category, amount in expense_breakdown.items():
             percentage = (amount / total_expenses * 100) if total_expenses > 0 else 0
-            report += f"• {category}: <b>{amount:.2f} {details['currency']}</b> ({percentage:.1f}%)\n"
+            report += f"• {category}: <b>{amount:.2f} {details.get('currency', '')}</b> ({percentage:.1f}%)\n"
     else:
         report += "• Нет данных о затратах\n"
 
@@ -312,23 +320,27 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
 📅 ПОСЛЕДНИЕ {len(daily_stats)} ДНЕЙ:
 ────────────────────────────
 """
-        total_profit_week = sum(day["net_profit"] for day in daily_stats)
-        total_sales_week = sum(day["sales_count"] for day in daily_stats)
+        total_profit_week = sum(day.get("net_profit", 0) for day in daily_stats)
+        total_sales_week = sum(day.get("sales_count", 0) for day in daily_stats)
 
         for day in daily_stats[:7]:  # Показываем только последние 7 дней
-            profit_emoji = "🟢" if day["net_profit"] >= 0 else "🔴"
-            report += f"• {day['day_name'][:3]}: {profit_emoji} {day['net_profit']:.0f} ({day['sales_count']} продаж)\n"
+            profit = day.get("net_profit", 0)
+            sales_count = day.get("sales_count", 0)
+            day_name = day.get("day_name", "День")
+            profit_emoji = "🟢" if profit >= 0 else "🔴"
+            report += f"• {day_name[:3]}: {profit_emoji} {profit:.0f} ({sales_count} продаж)\n"
 
-        report += f"• Итого за {len(daily_stats)} дней: <b>{total_profit_week:.0f} {details['currency']}</b> ({total_sales_week} продаж)\n"
+        report += f"• Итого за {len(daily_stats)} дней: <b>{total_profit_week:.0f} {details.get('currency', '')}</b> ({total_sales_week} продаж)\n"
 
     report += f"""
 🔮 ПРОГНОЗ НА 30 ДНЕЙ:
 ────────────────────────────
-• Ожидаемая прибыль: <b>{forecast['forecast_profit']:.0f} {details['currency']}</b>
-• Ожидаемая выручка: <b>{forecast['forecast_revenue']:.0f} {details['currency']}</b>
-• Тренд: <b>{forecast['trend_emoji']} {forecast['trend']}</b>
-• Уверенность в прогнозе: <b>{forecast['confidence']:.0f}%</b>
-• Среднедневная прибыль: <b>{forecast['avg_daily_profit']:.0f} {details['currency']}</b>
+• Ожидаемая прибыль: <b>{forecast.get('forecast_profit', 0):.0f} {details.get('currency', '')}</b>
+• Ожидаемая выручка: <b>{forecast.get('forecast_revenue', 0):.0f} {details.get('currency', '')}</b>
+• Тренд: <b>{forecast.get('trend_emoji', '➡️')} {forecast.get('trend', 'stable')}</b>
+• Уверенность в прогнозе: <b>{forecast.get('confidence', 0):.0f}%</b>
+• Среднедневная прибыль: <b>{forecast.get('avg_daily_profit', 0):.0f} {details.get('currency', '')}</b>
+• Проанализировано дней: <b>{forecast.get('days_analyzed', 0)}</b>
 
 💡 РЕКОМЕНДАЦИИ:
 ────────────────────────────
@@ -337,16 +349,16 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
     # Генерируем рекомендации на основе данных
     recommendations = []
 
-    if profitability['profitability_percentage'] < 70:
+    if profitability.get('profitability_percentage', 0) < 70:
         recommendations.append("• Увеличить долю прибыльных сделок - анализируйте убыточные продажи")
 
-    if roi['romi'] < 100:
+    if roi.get('romi', 0) < 100:
         recommendations.append("• Оптимизировать рекламные расходы - проверьте эффективность каналов")
 
-    if velocity['sales_per_day'] < 1:
+    if velocity.get('sales_per_day', 0) < 1:
         recommendations.append("• Увеличить частоту продаж - рассмотрите акции или дополнительные каналы сбыта")
 
-    if roi['ltv_cac_ratio'] < 3:
+    if roi.get('ltv_cac_ratio', 0) < 3:
         recommendations.append("• Улучшить удержание клиентов - работайте с повторными продажами")
 
     if len(recommendations) > 0:
@@ -357,7 +369,3 @@ def generate_analytics_report(session_summary: Dict[str, Any]) -> str:
     report += f"\n\n📅 Отчет сгенерирован: {datetime.now().strftime('%d.%m.%Y %H:%M')}"
 
     return report
-
-
-# Импортируем numpy для расчетов трендов
-import numpy as np
