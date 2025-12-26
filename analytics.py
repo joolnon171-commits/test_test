@@ -5,7 +5,13 @@ import matplotlib
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from db import get_daily_statistics, get_expense_breakdown
+# В начале analytics.py добавьте:
+import matplotlib
+matplotlib.use('Agg')  # ДОЛЖНО БЫТЬ В САМОМ НАЧАЛЕ, перед импортом pyplot
+import matplotlib.pyplot as plt
 
+# И импортируйте numpy в правильном месте
+import numpy as np
 # Используем агрессивный кэш для шрифтов
 matplotlib.use('Agg')
 
